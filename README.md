@@ -1,7 +1,8 @@
 # code
-Code, model
+Code, model Enhanced Target Recognition and Localization using Binocular Vision and Infrared Thermal Imaging
+
 Code Availability
-The code for this project is currently being prepared for release. We are in the process of finalizing the manuscript and will make the code publicly available upon acceptance of the paper.
+We can only provide part of the code for now, and the full code will be made public after the paper is accepted.
 
 Contact
 For any inquiries or collaboration opportunities, please contact the author, Luhui Li, at liluhui2060@163.com.
