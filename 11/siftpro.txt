@@ -1,0 +1,142 @@
+#include <iostream>
+#include "opencv2/core.hpp"
+#include "opencv2/features2d.hpp"
+#include "opencv2/xfeatures2d.hpp"
+#include "opencv2/highgui.hpp"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
+using namespace std;
+using namespace cv;
+using namespace cv::xfeatures2d;
+
+
+
+//int sift(cv::Mat dbImg, cv::Mat testImg, cv::Mat &outImg) {
+int main()
+{
+	Mat dbImg = imread("D://2//LVBO//Lefttzhongzhi30.PNG");
+	Mat testImg = imread("D://2//LVBO//rightzhongzhi30.PNG");
+	Mat outImg;
+
+	cv::Ptr<SIFT> detector = SIFT::create(500);
+	std::vector<cv::KeyPoint> keypoints1, keypoints2;
+	cv::Mat descriptor1, descriptor2;
+	//dbg("计算SIFT关键点和特征描述子");
+	std::cout << "计算SIFT关键点和特征描述子 " << std::endl;
+	detector->detectAndCompute(dbImg, cv::Mat(), keypoints1, descriptor1);
+	detector->detectAndCompute(testImg, cv::Mat(), keypoints2, descriptor2);
+	if (keypoints1.empty() || keypoints2.empty())
+	{
+		//dbg("sift key points empty");
+		std::cout << "sift key points empty " << std::endl;
+		return 0;
+	}
+
+	cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("");
+	std::vector<std::vector<cv::DMatch>> matches;
+	//使用KNN-matching算法，令K=2。则每个match得到两个最接近的descriptor，然后计算最接近距离和次接近距离之间的比值，当比值大于既定值时，才作为最终match。
+	matcher->knnMatch(descriptor1, descriptor2, matches, 2);
+
+	if (matches.empty()) {
+		//dbg("sift matched points is empty");
+		std::cout << "sift matched points is empty " << std::endl;
+		return 0;
+	}
+	if (matches.size() < 4) {
+		//dbg("sift matched points is less than 4");
+		std::cout << "sift matched points is less than 4 " << std::endl;
+		return 0;
+	}
+	//dbg("匹配点对数：", matches.size());
+	//dbg("去除错误的匹配点");
+	std::cout << "匹配点对数" << matches.size() << std::endl;
+	// Lowe's策略：这两个关键点中，如果最近的距离除以次近的距离得到的比率ratio少于某个阈值T，则接受这一对匹配点
+	//结果表明ratio取值在0.4~0.6之间最佳，小于0.4的很少有匹配点，大于0.6的则存在大量错误匹配点
+	const float ratio_thresh = 0.6f;
+	std::vector<cv::DMatch> good_matches;
+	for (size_t i = 0; i < matches.size(); ++i) {
+		if (matches[i][0].distance < ratio_thresh*matches[i][1].distance) {
+			good_matches.push_back(matches[i][0]);
+		}
+	}
+	cv::Mat img_good_matches;
+	cv::drawMatches(dbImg, keypoints1, testImg, keypoints2,
+		good_matches, img_good_matches, cv::Scalar::all(-1), cv::Scalar::all(-1),
+		std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
+	cv::imwrite("img_good_matches.jpg", img_good_matches); //保存图像
+	//dbg("匹配点对数：", good_matches.size());
+	std::cout << "匹配点对数" << good_matches.size() << std::endl;
+
+	//获取匹配特征点对的坐标值
+	std::vector<cv::Point2f> points_dbImg, points_testImg;
+	for (size_t i = 0; i < good_matches.size(); i++)
+	{
+		points_dbImg.push_back(keypoints1[good_matches[i].queryIdx].pt);//.pt对应坐标
+		points_testImg.push_back(keypoints2[good_matches[i].trainIdx].pt);
+	}
+
+	//RANSAC算法进一步剔除误匹配点对
+	std::vector<uchar>inliers;
+	cv::findFundamentalMat(points_dbImg, points_testImg, inliers, cv::FM_RANSAC, 3);//p1 p2必须为float型
+	// cv::Mat h2 = cv::findHomography(points_dbImg, points_testImg, inliers, cv::RANSAC);
+	std::vector<cv::DMatch> good_matches_ransac;
+	std::vector<cv::Point2f> dbImgPointsOk;
+	std::vector<cv::Point2f> testImgPointsOk;
+	for (size_t i = 0; i < inliers.size(); ++i) {
+		if (inliers[i]) {
+			good_matches_ransac.push_back(good_matches[i]);
+			dbImgPointsOk.push_back(points_dbImg[i]);       //图1的点
+			testImgPointsOk.push_back(points_testImg[i]);     //图2的对应点
+		}
+	}
+	//dbg("匹配点对数RANSAC：", good_matches_ransac.size());
+	std::cout << "匹配点对数RANSAC:" << good_matches_ransac.size() << std::endl;
+
+	cv::Mat img_matches_ransac;
+	cv::drawMatches(dbImg, keypoints1, testImg, keypoints2,
+		good_matches_ransac, img_matches_ransac, cv::Scalar::all(-1), cv::Scalar::all(-1),
+		std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
+	cv::imwrite("img_matches_ransac.jpg", img_matches_ransac); //保存图像
+	//计算仿射变换矩阵
+	//cv::estimateAffine2D(InputArray src,InputArray dst)
+	//src变换之前的关键点Array， dst变换之后的关键点Array，求从src到dst的变换矩阵
+	//我们要将输入的测试图像坐标进行变换，变换到数据库里的图像坐标
+	//cv::Mat T = cv:estimateAffine2D(testImgPointsOk, dbImgPointsOk);
+	 cv::Mat T = cv::findHomography(testImgPointsOk, dbImgPointsOk, cv::RANSAC);
+	if (!T.empty())
+		//dbg("输出仿射变换矩阵T", T);
+		std::cout << "输出仿射变换矩阵T " << T << std::endl;
+	else {
+		//dbg("变换矩阵为空");
+		std::cout << "变换矩阵为空 " << std::endl;
+		return 0;
+	}
+	cv::Size refSize(dbImg.cols, dbImg.rows);
+	//dbg(refSize);
+	std::cout << "ZHIWEI" << refSize << std::endl;
+	// cv::warpPerspective(testImg, outImg, T, refSize);
+	//应用仿射矩阵T，对输入的图像进行像素重采样
+	cv::warpAffine(testImg, outImg, T, refSize, cv::INTER_CUBIC);
+	if (outImg.empty())
+	{
+		//dbg("warpPerspective image output empty");
+		std::cout << "warpPerspective image output empty" << std::endl;
+		return 0;
+	}
+	return 1;
+}
+//int main()
+//{
+//	cv::Mat yuanshi =
+//		cv::imread("D://2//LVBO//Lefttzhongzhi30.PNG");
+//	if (yuanshi.empty())
+//		return -1;
+
+//	cv::Mat junzhi =
+//		cv::imread("D://2//LVBO//rightzhongzhi30.PNG");
+//	if (junzhi.empty())
+//		return -1;
+//	int sift = 0
+//		sift（yuanshi，junzhi）；

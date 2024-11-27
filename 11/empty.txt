@@ -1,0 +1,5 @@
+if(img1.empty() || img2.empty())
+    {
+        printf("Can't read one of the images\n");
+        return -1;
+    }

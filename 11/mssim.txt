@@ -1,0 +1,131 @@
+//OpenCV版本opencv2.4.13
+//图像处理开发需求、图像处理接私活挣零花钱，请加微信/QQ 2487872782
+//图像处理开发资料、图像处理技术交流请加QQ群，群号 271891601
+
+
+#include <opencv2/core/core.hpp>  
+#include <opencv2/highgui/highgui.hpp>  
+#include <opencv2/imgproc/imgproc.hpp>
+#include <iostream>  
+using namespace std;
+using namespace cv;
+
+
+// PSNR 峰值信噪比计算 返回数值为30-50dB 值越大越好
+double PSNR(const Mat& I1, const Mat& I2)//注意,两幅图的大小要一致
+{
+	cv::Mat s1;
+	// 计算图像差|I1 - I2|
+	absdiff(I1, I2, s1);
+	// 转成32浮点数进行平方
+	s1.convertTo(s1, CV_32F);
+	// s1*s1，即|I1 - I2|^2
+	s1 = s1.mul(s1);
+	// 分别叠加每个通道的元素，存于s中
+	cv::Scalar s = sum(s1);
+	// 计算所有通道元素和
+	double sse = s.val[0] + s.val[1] + s.val[2];
+	// 当元素很小时返回0值
+	if (sse <= 1e-10)
+		return 0;
+	else
+	{
+		// 根据公式计算当前I1与I2的均方误差
+		double mse = sse / (double)(I1.channels() * I1.total());
+		// 计算峰值信噪比
+		double psnr = 10.0*log10((255 * 255) / mse);
+		return psnr;
+	}
+}
+// MSSIM 结构相似性计算 0到1 值越大越好
+//返回值为三个元素构成的向量，分别表示亮度、对比度、结构的相似性。
+cv::Scalar MSSIM(const Mat& i1, const Mat& i2) //注意,两幅图的大小要一致
+{
+	const double C1 = 6.5025, C2 = 58.5225;
+	cv::Mat I1, I2;
+	// 转换成32浮点数进行平方操作
+	i1.convertTo(I1, CV_32F);
+	i2.convertTo(I2, CV_32F);
+	// I2^2
+	cv::Mat I2_2 = I2.mul(I2);
+	cv::Mat I1_2 = I1.mul(I1);
+	cv::Mat I1_I2 = I1.mul(I2);
+	cv::Mat mu1, mu2;
+	// 高斯加权计算每一窗口的均值、方差以及协方差
+	GaussianBlur(I1, mu1, Size(11, 11), 1.5);
+	GaussianBlur(I2, mu2, Size(11, 11), 1.5);
+	Mat mu1_2 = mu1.mul(mu1);
+	Mat mu2_2 = mu2.mul(mu2);
+	Mat mu1_mu2 = mu1.mul(mu2);
+	Mat sigma1_2, sigma2_2, sigma12;
+	// 高斯平滑，具体原理见4.4节
+	GaussianBlur(I1_2, sigma1_2, Size(11, 11), 1.5);
+	sigma1_2 -= mu1_2;
+	GaussianBlur(I2_2, sigma2_2, Size(11, 11), 1.5);
+	sigma2_2 -= mu2_2;
+	GaussianBlur(I1_I2, sigma12, Size(11, 11), 1.5);
+	sigma12 -= mu1_mu2;
+	// 根据计算公式相应参数
+	Mat t1, t2, t3;
+	t1 = 2 * mu1_mu2 + C1;
+	t2 = 2 * sigma12 + C2;
+	// t3 = ((2*mu1_mu2 + C1).*(2*sigma12 + C2))
+	t3 = t1.mul(t2);
+	t1 = mu1_2 + mu2_2 + C1;
+	t2 = sigma1_2 + sigma2_2 + C2;
+	// t1 =((mu1_2 + mu2_2 + C1).*(sigma1_2 + sigma2_2 + C2))
+	t1 = t1.mul(t2);
+	Mat ssim_map;
+	// ssim_map =  t3./t1;
+	divide(t3, t1, ssim_map);
+	// 将平均值作为两图像的结构相似性度量    
+	cv::Scalar mssim = mean(ssim_map);
+	return mssim;
+}
+
+
+
+int main()
+{
+	// 读取源图像及待匹配图像  
+	cv::Mat srcImage1 =
+		cv::imread("D:\\2\\Left1.jpg", 1);
+	if (srcImage1.empty())
+		return -1;
+
+	cv::Mat srcImage2 =
+		cv::imread("D:\\2\\Left1.png", 1);
+	if (srcImage2.empty())
+		return -1;
+
+	cv::Mat srcImage3 =
+		cv::imread("D:\\2\\Right1.png", 1);
+	if (srcImage3.empty())
+		return -1;
+
+	cv::imshow("hand1", srcImage1);
+	cv::imshow("hand3", srcImage2);
+	cv::imshow("circle", srcImage3);
+
+	double psnr_01 = 0;
+	psnr_01 = PSNR(srcImage1, srcImage2);//注意,两幅图的大小要一致
+	std::cout << "hand1 VS hand3 PSNR is: " << psnr_01 << std::endl;
+
+	double psnr_02 = 0;
+	psnr_02 = PSNR(srcImage1, srcImage3);//注意,两幅图的大小要一致
+	std::cout << "hand1 VS circle PSNR is: " << psnr_02 << std::endl;
+
+	cv::Scalar mssim_01;
+	mssim_01 = MSSIM(srcImage1, srcImage2);//注意,两幅图的大小要一致
+	std::cout << "hand1 VS hand3 MSSIM is: " << mssim_01 << std::endl;
+
+
+	cv::Scalar mssim_02;
+	mssim_02 = MSSIM(srcImage1, srcImage3);//注意,两幅图的大小要一致
+	std::cout << "hand1 VS circle MSSIM is: " << mssim_02 << std::endl;
+
+
+
+	cv::waitKey(0);
+	return 0;
+}

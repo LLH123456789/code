@@ -1,0 +1,102 @@
+#include <iostream>
+#include <opencv2/core.hpp>
+#include <opencv2/features2d.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+
+using namespace std;
+
+void find_feature_matches(cv::Mat img1, cv::Mat img2, vector<cv::KeyPoint> &kps1, vector<cv::KeyPoint> &kps2, vector<cv::DMatch> &matches);
+
+void pose_estimation_2d2d(vector<cv::KeyPoint> &kps1, vector<cv::KeyPoint> &kps2, vector<cv::DMatch> matches, cv::Mat &R, cv::Mat &t);
+
+int main(int argc, char **argv) {
+
+	cv::Mat img1, img2;
+	img1 = cv::imread("D://2//LVBO//Lefttzhongzhi30.png");
+	img2 = cv::imread("D://2//LVBO//rightzhongzhi30.png");
+
+	vector<cv::KeyPoint> keypoints1, keypoints2;
+	vector<cv::DMatch> matches;
+
+	find_feature_matches(img1, img2, keypoints1, keypoints2, matches);
+	cout << "find " << matches.size() << " points" << endl;
+	    cv::Mat img_match;
+	    cv::drawMatches(img1,keypoints1, img2, keypoints2, matches, img_match);
+	    cv::imshow("img_match", img_match);
+		imwrite("D://2//LVBO//orbpipei.png", img_match);
+	    cv::waitKey(0);
+	    cv::destroyAllWindows();
+	cv::Mat R, t;
+	pose_estimation_2d2d(keypoints1, keypoints2, matches, R, t);
+
+	return 0;
+}
+void find_feature_matches(cv::Mat img1, cv::Mat img2, vector<cv::KeyPoint> &kps1, vector<cv::KeyPoint> &kps2, vector<cv::DMatch> &matches) {
+	cv::Mat descripions1, descripions2;
+	cv::Ptr<cv::FeatureDetector> detector = cv::ORB::create();
+	cv::Ptr<cv::DescriptorExtractor> extractor = cv::ORB::create();
+	cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("BruteForce-Hamming"); //汉明距离
+
+	detector->detect(img1, kps1);
+	detector->detect(img2, kps2);
+	extractor->compute(img1, kps1, descripions1);
+	extractor->compute(img2, kps2, descripions2);
+	matcher->match(descripions1, descripions2, matches);
+
+	//匹配点筛选
+	auto min_max = minmax_element(matches.begin(), matches.end(),
+		[](const cv::DMatch &m1, const cv::DMatch &m2) {return m1.distance < m2.distance; }
+	); //计算最小距离和最大距离
+	double min_dist = min_max.first->distance;
+	double max_dist = min_max.second->distance;
+
+	vector<cv::DMatch> good_matches;
+	for (int i = 0; i < descripions1.rows; i++) {
+		if (matches[i].distance <= max(2 * min_dist, 30.0)) {
+			good_matches.push_back(matches[i]);
+		}
+	}
+	matches = good_matches;
+}
+
+void pose_estimation_2d2d(vector<cv::KeyPoint> &kps1,
+	vector<cv::KeyPoint> &kps2,
+	vector<cv::DMatch> matches,
+	cv::Mat &R, cv::Mat &t) {
+	//内参矩阵K
+	cv::Mat K = (cv::Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
+
+	//把匹配点转换为vector<Point2f>的形式
+	vector<cv::Point2f> points1;
+	vector<cv::Point2f> points2;
+
+	for (int i = 0; i < (int)matches.size(); i++)
+	{
+		points1.push_back(kps1[matches[i].queryIdx].pt);
+		points2.push_back(kps2[matches[i].trainIdx].pt);
+	}
+
+	//计算基础矩阵
+	cv::Mat F;
+	F = cv::findFundamentalMat(points1, points2, cv::FM_8POINT);    //8点法求解
+	cout << "F is" << endl << F << endl;
+
+	//计算本质矩阵
+	cv::Point2d principle_point(325.1, 249.7);  //相机光心
+	double f = 521;  //相机焦距
+
+	cv::Mat E;
+	E = cv::findEssentialMat(points1, points2, f, principle_point);
+	cout << "E is" << endl << E << endl;
+
+	//计算单应矩阵
+	cv::Mat H;
+	H = cv::findHomography(points1, points2, cv::RANSAC, 3);
+	cout << "H is" << endl << H << endl;
+
+	//根据本质矩阵恢复旋转和平移信息
+	cv::recoverPose(E, points1, points2, R, t, f, principle_point);
+	cout << "R is" << endl << R << endl;
+	cout << "t is" << endl << t << endl;
+}

@@ -1,0 +1,41 @@
+#include <opencv2/opencv.hpp>
+#include<iostream>
+using namespace std;
+using namespace cv;
+
+int main()
+{
+	Mat dst1, dst2, dst3, dst4, dst5;
+	Mat src = imread("D://2//LVBO//qian//Left35.png");
+
+	imshow("src", src);
+
+	//方框滤波
+	boxFilter(src, dst1, src.depth(), Size(3, 3), Point(-1, -1), false);
+	namedWindow("方框滤波", CV_WINDOW_AUTOSIZE);
+	imshow("方框滤波", dst1);
+	imwrite("D://2//LVBO//hou//fangkuang35.png", dst1);
+	//均值滤波
+	blur(src, dst2, Size(10, 10));
+	namedWindow("均值滤波", CV_WINDOW_AUTOSIZE);
+	imshow("均值滤波", dst2);
+	imwrite("D://2//LVBO//hou//junzhi35.png", dst2);
+	//高斯滤波
+	GaussianBlur(src, dst3, Size(5, 5), 0, 0);
+	namedWindow("高斯滤波", CV_WINDOW_AUTOSIZE);
+	imshow("高斯滤波", dst3);
+	imwrite("D://2//LVBO//hou//gaosi35.png", dst3);
+	//中值滤波
+	medianBlur(src, dst4, 9);
+	namedWindow("中值滤波", CV_WINDOW_AUTOSIZE);
+	imshow("中值滤波", dst4);
+	imwrite("D://2//LVBO//hou//zhongzhi35.png", dst3);
+	//双边滤波
+	bilateralFilter(src, dst5, 10, 10, 10);
+	namedWindow("双边滤波", CV_WINDOW_AUTOSIZE);
+	imshow("双边滤波", dst5);
+	imwrite("D://2//LVBO//hou//shuangbian35.png", dst5);
+
+	waitKey(0);
+	return 0;
+}

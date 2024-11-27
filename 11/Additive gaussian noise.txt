@@ -1,0 +1,28 @@
+#include <opencv2\opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	Mat img = imread("qq.jpg");
+	
+	if (img.empty())
+	{
+		cout << "请确认图像文件名称是否正确" << endl;
+		return -1;
+	}
+	//生成与原图像同尺寸、数据类型和通道数的矩阵
+	Mat img_noise = Mat::zeros(img.rows, img.cols, img.type());
+	imshow("lena原图", img);
+	RNG rng;                                   //创建一个RNG类
+	rng.fill(img_noise, RNG::NORMAL, 10, 20);  //生成三通道的高斯分布随机数（10，20）表示均值和标准差
+	imshow("三通道高斯噪声", img_noise);
+	img = img + img_noise;                     //在彩色图像中添加高斯噪声	
+	imwrite("gauss_noise.png", img);
+	imshow("img添加噪声", img);                //显示添加高斯噪声后的图像
+	waitKey(0);
+	return 0;
+}
+
